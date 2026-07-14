@@ -1,0 +1,45 @@
+.gitignore (root)
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Node
+node_modules/
+dist/
+build/
+.vite/
+.npm/
+
+# Env
+.env
+*.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Recordings & uploads
+recordings/
+uploads/
+*.mp4
+*.webm
+*.mkv
+
+# Logs
+*.log
+logs/
+
+# Test
+*.db
+.coverage
+htmlcov/

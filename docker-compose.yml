@@ -1,0 +1,95 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: meet_postgres
+    environment:
+      POSTGRES_USER: meetuser
+      POSTGRES_PASSWORD: meetpass
+      POSTGRES_DB: meetplatform
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meetuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: meet_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: meet_livekit
+    command: --dev --bind 0.0.0.0
+    environment:
+      LIVEKIT_KEYS: "devkey: secretkey123456789abcdefghijklmnop"
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build: ./backend
+    container_name: meet_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      livekit:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+asyncpg://meetuser:meetpass@postgres:5432/meetplatform
+      REDIS_URL: redis://redis:6379/0
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secretkey123456789abcdefghijklmnop
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production-12345
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 1440
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: http://localhost:8000/api/auth/google/callback
+      RECORDING_STORAGE_PATH: /app/recordings
+      FILE_UPLOAD_PATH: /app/uploads
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/recordings:/app/recordings
+      - ./backend/uploads:/app/uploads
+    command: >
+      sh -c "alembic upgrade head 2>/dev/null || true &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build: ./frontend
+    container_name: meet_frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_LIVEKIT_URL: ws://localhost:7880
+      VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  postgres_data:
+  redis_data:
